@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"html/template"
 	"fmt"
+	"github.com/yurakawa/gowebprog/chap02/chitchat/data"
 )
 
 func main() {

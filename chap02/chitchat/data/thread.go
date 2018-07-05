@@ -85,6 +85,7 @@ func (user *User) CreatePost(conv Thread, body string)(post Post, err error) {
 	defer stmt.Close()
 	// use QueryRow to return a row and scan the returned id into the Session struct
 	err = stmt.QueryRow(createUUID(), body, user.Id, conv.Id, time.Now()).Scan(&post.Id, &post.Uuid, &post.Body, &post.UserId, &post.ThreadId, &post.CreatedAt)
+	return
 }
 
 // Get all threads in the database and returns it

@@ -1,6 +1,9 @@
 package main
 
-import "net/http"
+import (
+	"net/http"
+	"fmt"
+)
 
 func writeExample(w http.ResponseWriter, r *http.Request) {
 	str := `<html>
@@ -10,10 +13,16 @@ func writeExample(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(str))
 }
 
+func writeHeaderExample(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(501)
+	fmt.Fprintln(w, "そのようなサービスはありません。他をあたってください")
+}
+
 func main() {
 	server := http.Server{
 		Addr: "127.0.0.1:8080",
 	}
 	http.HandleFunc("/write", writeExample)
+	http.HandleFunc("/writeHeader", writeHeaderExample)
 	server.ListenAndServe()
 }

@@ -14,8 +14,8 @@ func setCookie(w http.ResponseWriter, r *http.Request) {
 		Value: "Manning Publications Co",
 		HttpOnly: true,
 	}
-	w.Header().Set("Set-Cookie", c1.String())
-	w.Header().Add("Set-Cookie", c2.String())
+	http.SetCookie(w, &c1)
+	http.SetCookie(w, &c2)
 }
 
 func main() {

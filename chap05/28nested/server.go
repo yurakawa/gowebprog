@@ -15,10 +15,13 @@ func process(w http.ResponseWriter, r *http.Request) {
 func process2(w http.ResponseWriter, r *http.Request) {
 	rand.Seed(time.Now().Unix())
 	var t *template.Template
-	if rand.Intn(10) > 5 {
+	num := rand.Intn(10)
+	if num > 7 {
 		t, _ = template.ParseFiles("layout.html", "red_hello.html")
-	} else {
+	} else if (num > 3){
 		t, _ = template.ParseFiles("layout.html", "blue_hello.html")
+	} else {
+		t, _ = template.ParseFiles("layout.html")
 	}
 	t.ExecuteTemplate(w, "layout", "")
 

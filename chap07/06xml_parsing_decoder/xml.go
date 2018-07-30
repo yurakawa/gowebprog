@@ -3,14 +3,17 @@ package main
 import (
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
+	"io"
+	"os"
 )
 
 type Post struct {
-	XMLName xml.Name `xml:"post"`
-	ID      string   `xml:"id,attr"`
-	Content string   `xml:"content"`
-	Author  Author   `xml:"author"`
+	XMLName  xml.Name  `xml:"post"`
+	ID       string    `xml:"id,attr"`
+	Content  string    `xml:"content"`
+	Author   Author    `xml:"author"`
+	XML      string    `xml:",innerxml"`
+	Comments []Comment `xml:"comments>comment"`
 }
 
 type Author struct {
@@ -18,24 +21,37 @@ type Author struct {
 	Name string `xml:",chardata"`
 }
 
-func main() {
-	post := Post{
-		ID:      "1",
-		Content: "Hello World",
-		Author: Author{
-			ID:   "2",
-			Name: "Sau Sheong",
-		},
-	}
+type Comment struct {
+	ID      string `xml:"id,attr"`
+	Content string `xml:"content"`
+	Author  Author `xml:"author"`
+}
 
-	output, err := xml.MarshalIndent(&post, "", "\t")
+func main() {
+	xmlFile, err := os.Open("post.xml")
 	if err != nil {
-		fmt.Println("Error marshalling to XML:", err)
+		fmt.Println("Error operning XML file:", err)
 		return
 	}
+	defer xmlFile.Close()
 
-	err = ioutil.WriteFile("post.xml", []byte(xml.Header+string(output)), 0644)
-	if err != nil {
-		fmt.Println("Error writeing XML to file:", err)
+	decoder := xml.NewDecoder(xmlFile)
+	for {
+		t, err := decoder.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			fmt.Println("Error decoding XML into tokens.", err)
+			return
+		}
+
+		switch se := t.(type) {
+		case xml.StartElement:
+			if se.Name.Local == "comment" {
+				var comment Comment
+				decoder.DecodeElement(&comment, &se)
+			}
+		}
 	}
 }

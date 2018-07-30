@@ -34,7 +34,7 @@ func main() {
 		return
 	}
 
-	err = ioutil.WriteFile("post.xml", output, 0644)
+	err = ioutil.WriteFile("post.xml", []byte(xml.Header+string(output)), 0644)
 	if err != nil {
 		fmt.Println("Error writeing XML to file:", err)
 	}

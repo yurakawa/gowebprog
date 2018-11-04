@@ -1,11 +1,12 @@
 package main
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/hashicorp/packer/common/json"
 )
 
 func TestHandleGet(t *testing.T) {

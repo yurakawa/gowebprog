@@ -8,6 +8,25 @@ import (
 
 var Db *sql.DB
 
+type Text interface {
+	fetch(id int) (err error)
+	create() (err error)
+	update() (err error)
+	delete() (err error)
+}
+
+type Post struct {
+	Db      *sql.DB
+	ID      int    `json:"id"`
+	Content string `json:"content"`
+	Author  string `json:"author"`
+}
+
+func (post *Post) fetch(id int) (err error) {
+	err = post.Db.QueryRow("select id, content, author from posts where id = $1", id).Scan(&post.ID, &post.Content, &post.Author)
+	return
+}
+
 // connect to the Db
 func init() {
 	var err error

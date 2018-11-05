@@ -8,7 +8,7 @@ psql -h localhost -U gwp -f setup.sql
 
 go build
 
-./11httptest2 &                                          # サーバ起動
+./server
 ./script_create                                            # curlを実行
 psql -h localhost  -U gwp -d gwp -c "select * from posts;" # レコードが作成されたことを確認
 
@@ -17,50 +17,54 @@ psql -h localhost  -U gwp -d gwp -c "select * from posts;" # レコードが作�
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"path"
 	"strconv"
 )
 
-type Post struct {
-	ID      int    `json:"id"`
-	Content string `json:"content"`
-	Author  string `json:"author"`
-}
-
 func main() {
-	server := http.Server{
-		Addr: "127.0.0.1:8080",
+
+	var err error
+	db, err := sql.Open("postgres", "user=gwp dbname=gwp sslmode=disable")
+	if err != nil {
+		panic(err)
 	}
-	http.HandleFunc("/post/", handleRequest)
+
+	server := http.Server{
+		Addr: ":8080",
+	}
+	http.HandleFunc("/post/", handleRequest(&Post{Db: db}))
 	server.ListenAndServe()
 }
 
-func handleRequest(w http.ResponseWriter, r *http.Request) {
-	var err error
-	switch r.Method {
-	case "GET":
-		err = handleGet(w, r)
-	case "POST":
-		err = handlePost(w, r)
-	case "PUT":
-		err = handlePut(w, r)
-	case "DELETE":
-		err = handleDelete(w, r)
-	}
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+func handleRequest(t Text) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
+		switch r.Method {
+		case "GET":
+			err = handleGet(w, r, t)
+		case "POST":
+			err = handlePost(w, r, t)
+		case "PUT":
+			err = handlePut(w, r, t)
+		case "DELETE":
+			err = handleDelete(w, r, t)
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 }
 
-func handleGet(w http.ResponseWriter, r *http.Request) (err error) {
+func handleGet(w http.ResponseWriter, r *http.Request, post Text) (err error) {
 	id, err := strconv.Atoi(path.Base(r.URL.Path))
 	if err != nil {
 		return
 	}
-	post, err := retrieve(id)
+	err = post.fetch(id)
 	if err != nil {
 		return
 	}

@@ -22,24 +22,9 @@ type Post struct {
 	Author  string `json:"author"`
 }
 
+// Get a single post
 func (post *Post) fetch(id int) (err error) {
 	err = post.Db.QueryRow("select id, content, author from posts where id = $1", id).Scan(&post.ID, &post.Content, &post.Author)
-	return
-}
-
-// connect to the Db
-func init() {
-	var err error
-	Db, err = sql.Open("postgres", "user=gwp dbname=gwp password=gwp sslmode=disable")
-	if err != nil {
-		panic(err)
-	}
-}
-
-// Get a single post
-func retrieve(id int) (post Post, err error) {
-	post = Post{}
-	err = Db.QueryRow("select id, content, author from posts where id = $1", id).Scan(&post.ID, &post.Content, &post.Author)
 	return
 }
 

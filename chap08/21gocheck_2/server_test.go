@@ -1,3 +1,7 @@
+/**
+$ go test -check.vv # 詳細表示オプション
+*/
+
 package main
 
 import (
@@ -6,38 +10,45 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	. "gopkg.in/check.v1"
 )
 
-func TestHandleGet(t *testing.T) {
-	// 各テストケースは独立して実行されるため、それぞれにテスト用のWebサーバを立ち上げる必要がある
-	mux := http.NewServeMux()                            // テストを実行するマルチプレクサを生成
-	mux.HandleFunc("/post/", handleRequest(&FakePost{})) // テスト対象のハンドラを追加
-
-	writer := httptest.NewRecorder()                     // 返されたHTTPレスポンスを取得
-	request, _ := http.NewRequest("GET", "/post/1", nil) // テストしたいハンドラ宛のリクエストを作成
-	mux.ServeHTTP(writer, request)                       // テスト対象のハンドラにリクエストを送信
-
-	if writer.Code != 200 { //ResponseRecoderにより結果をチェック
-		t.Errorf("Response code is %v", writer.Code)
-	}
-
-	var post Post
-	json.Unmarshal(writer.Body.Bytes(), &post)
-	if post.ID != 1 {
-		t.Error("Cannot retrieve JSON post")
-	}
+type PostTestSuite struct {
+	mux    *http.ServeMux
+	post   *FakePost
+	writer *httptest.ResponseRecorder
 }
 
-func TestHandlePut(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/post/", handleRequest(&FakePost{}))
+func init() {
+	Suite(&PostTestSuite{})
+}
 
-	writer := httptest.NewRecorder()
+func Test(t *testing.T) { TestingT(t) }
+
+func (s *PostTestSuite) SetUpTest(c *C) {
+	s.post = &FakePost{}
+	s.mux = http.NewServeMux()
+	s.mux.HandleFunc("/post/", handleRequest(s.post))
+	s.writer = httptest.NewRecorder()
+}
+
+func (s *PostTestSuite) TestGetPost(c *C) {
+	request, _ := http.NewRequest("GET", "/post/1", nil)
+	s.mux.ServeHTTP(s.writer, request)
+
+	c.Check(s.writer.Code, Equals, 200)
+	var post Post
+	json.Unmarshal(s.writer.Body.Bytes(), &post)
+	c.Check(post.ID, Equals, 1)
+}
+
+func (s *PostTestSuite) TestPutPost(c *C) {
 	json := strings.NewReader(`{"content":"Updated post","author":"Sau Sheong"}`)
 	request, _ := http.NewRequest("PUT", "/post/1", json)
-	mux.ServeHTTP(writer, request)
+	s.mux.ServeHTTP(s.writer, request)
 
-	if writer.Code != 200 {
-		t.Errorf("Response code is %v", writer.Code)
-	}
+	c.Check(s.writer.Code, Equals, 200)
+	c.Check(s.post.ID, Equals, 1)
+	c.Check(s.post.Content, Equals, "Updated post")
 }

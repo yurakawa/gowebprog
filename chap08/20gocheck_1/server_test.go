@@ -1,3 +1,7 @@
+/**
+$ go test -check.vv # 詳細表示オプション
+*/
+
 package main
 
 import (

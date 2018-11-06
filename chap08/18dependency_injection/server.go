@@ -77,11 +77,10 @@ func handleGet(w http.ResponseWriter, r *http.Request, post Text) (err error) {
 	return
 }
 
-func handlePost(w http.ResponseWriter, r *http.Request) (err error) {
+func handlePost(w http.ResponseWriter, r *http.Request, post Text) (err error) {
 	len := r.ContentLength
 	body := make([]byte, len)
 	r.Body.Read(body)
-	var post Post
 	json.Unmarshal(body, &post)
 	err = post.create()
 	if err != nil {
@@ -91,13 +90,13 @@ func handlePost(w http.ResponseWriter, r *http.Request) (err error) {
 	return
 }
 
-func handlePut(w http.ResponseWriter, r *http.Request) (err error) {
+func handlePut(w http.ResponseWriter, r *http.Request, post Text) (err error) {
 	id, err := strconv.Atoi(path.Base(r.URL.Path))
 	if err != nil {
 		return
 	}
 
-	post, err := retrieve(id)
+	err = post.fetch(id)
 	if err != nil {
 		return
 	}
@@ -113,12 +112,12 @@ func handlePut(w http.ResponseWriter, r *http.Request) (err error) {
 	return
 }
 
-func handleDelete(w http.ResponseWriter, r *http.Request) (err error) {
+func handleDelete(w http.ResponseWriter, r *http.Request, post Text) (err error) {
 	id, err := strconv.Atoi(path.Base(r.URL.Path))
 	if err != nil {
 		return
 	}
-	post, err := retrieve(id)
+	err = post.fetch(id)
 	if err != nil {
 		return
 	}

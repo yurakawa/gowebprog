@@ -10,8 +10,8 @@ import (
 
 func TestHandleGet(t *testing.T) {
 	// 各テストケースは独立して実行されるため、それぞれにテスト用のWebサーバを立ち上げる必要がある
-	mux := http.NewServeMux()               // テストを実行するマルチプレクサを生成
-	mux.HandleFunc("/post/", handleRequest) // テスト対象のハンドラを追加
+	mux := http.NewServeMux()                            // テストを実行するマルチプレクサを生成
+	mux.HandleFunc("/post/", handleRequest(&FakePost{})) // テスト対象のハンドラを追加
 
 	writer := httptest.NewRecorder()                     // 返されたHTTPレスポンスを取得
 	request, _ := http.NewRequest("GET", "/post/1", nil) // テストしたいハンドラ宛のリクエストを作成

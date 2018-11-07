@@ -1,0 +1,14 @@
+Story: "投稿を取得する"
+In order to "投稿をユーザーに提示する"
+As a "呼び出し側プログラム"
+I want to "投稿を取得する"
+
+Scenario 1: "idを使う"
+Given" 投稿のidが1"
+When "そのidのGETリクエストを送信した"
+Then "投稿を取得する"
+
+Scenario 2: "非整数のidを使う"
+Given "投稿のidが"hello"
+When "そのidのGETリクエストを送信した"
+Then "HTTP 500のレスポンスを取得する"

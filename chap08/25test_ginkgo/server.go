@@ -32,7 +32,6 @@ type Text interface {
 	delete() (err error)
 }
 
-// main handler function
 func HandleRequest(t Text) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error

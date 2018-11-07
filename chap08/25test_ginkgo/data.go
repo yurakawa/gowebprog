@@ -6,24 +6,15 @@ import (
 	_ "github.com/lib/pq"
 )
 
-var Db *sql.DB
-
-type Text interface {
-	fetch(id int) (err error)
-	create() (err error)
-	update() (err error)
-	delete() (err error)
-}
-
 type Post struct {
-	Db      *sql.DB
+	Db      sql.DB
 	ID      int    `json:"id"`
 	Content string `json:"content"`
 	Author  string `json:"author"`
 }
 
 // Get a single post
-func (post *Post) fetch(id int) (err error) {
+func (post *Post) retrieve(id int) (err error) {
 	err = post.Db.QueryRow("select id, content, author from posts where id = $1", id).Scan(&post.ID, &post.Content, &post.Author)
 	return
 }
@@ -31,7 +22,7 @@ func (post *Post) fetch(id int) (err error) {
 // Create a new post
 func (post *Post) create() (err error) {
 	statement := "insert into posts (content, author) values ($1, $2) returning id"
-	stmt, err := Db.Prepare(statement)
+	stmt, err := post.Db.Prepare(statement)
 	if err != nil {
 		return
 	}
@@ -42,12 +33,12 @@ func (post *Post) create() (err error) {
 
 // Update a post
 func (post *Post) update() (err error) {
-	_, err = Db.Exec("update posts set content = $2, author = $3 where id = $1", post.ID, post.Content, post.Author)
+	_, err = post.Db.Exec("update posts set content = $2, author = $3 where id = $1", post.ID, post.Content, post.Author)
 	return
 }
 
 // Delete a post
 func (post *Post) delete() (err error) {
-	_, err = Db.Exec("delete from posts where id = $1", post.ID)
+	_, err = post.Db.Exec("delete from posts where id = $1", post.ID)
 	return
 }

@@ -1,19 +1,3 @@
-/*
-
-# docekrコンテナ起動
-docker container run -d --rm --name some-postgres -e POSTGRES_USER=gwp -e POSTGRES_PASSWORD=gwp -p 5432:5432 postgres
-
-#不要# psql -h localhost -U gwp -f install.sql
-psql -h localhost -U gwp -f setup.sql
-
-go build
-
-./server
-./script_create                                            # curlを実行
-psql -h localhost  -U gwp -d gwp -c "select * from posts;" # レコードが作成されたことを確認
-
-*/
-
 package main
 
 import (
@@ -22,24 +6,34 @@ import (
 	"net/http"
 	"path"
 	"strconv"
+
+	_ "github.com/lib/pq"
 )
 
 func main() {
-
+	// connect to the Db
 	var err error
-	db, err := sql.Open("postgres", "user=gwp dbname=gwp sslmode=disable")
+	db, err := sql.Open("postgres", "user=gwp dbname=gwp password=gwp sslmode=disable")
 	if err != nil {
 		panic(err)
 	}
 
 	server := http.Server{
-		Addr: ":8080",
+		Addr: "127.0.0.1:8080",
 	}
-	http.HandleFunc("/post/", handleRequest(&Post{Db: db}))
+	http.HandleFunc("/post/", HandleRequest(&Post{Db: *db}))
 	server.ListenAndServe()
 }
 
-func handleRequest(t Text) http.HandlerFunc {
+type Text interface {
+	retrieve(id int) (err error)
+	create() (err error)
+	update() (err error)
+	delete() (err error)
+}
+
+// main handler function
+func HandleRequest(t Text) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		switch r.Method {
@@ -59,30 +53,33 @@ func handleRequest(t Text) http.HandlerFunc {
 	}
 }
 
+// Retrieve a post
+// GET /post/1
 func handleGet(w http.ResponseWriter, r *http.Request, post Text) (err error) {
 	id, err := strconv.Atoi(path.Base(r.URL.Path))
 	if err != nil {
 		return
 	}
-	err = post.fetch(id)
+	err = post.retrieve(id)
 	if err != nil {
 		return
 	}
-	output, err := json.MarshalIndent(&post, "", "\t\t")
+	output, err := json.MarshalIndent(post, "", "\t\t")
 	if err != nil {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(output)
-	// http.NotFound(w, r)
 	return
 }
 
+// Create a post
+// POST /post/
 func handlePost(w http.ResponseWriter, r *http.Request, post Text) (err error) {
 	len := r.ContentLength
 	body := make([]byte, len)
 	r.Body.Read(body)
-	json.Unmarshal(body, &post)
+	json.Unmarshal(body, post)
 	err = post.create()
 	if err != nil {
 		return
@@ -91,20 +88,21 @@ func handlePost(w http.ResponseWriter, r *http.Request, post Text) (err error) {
 	return
 }
 
+// Update a post
+// PUT /post/1
 func handlePut(w http.ResponseWriter, r *http.Request, post Text) (err error) {
 	id, err := strconv.Atoi(path.Base(r.URL.Path))
 	if err != nil {
 		return
 	}
-
-	err = post.fetch(id)
+	err = post.retrieve(id)
 	if err != nil {
 		return
 	}
 	len := r.ContentLength
 	body := make([]byte, len)
 	r.Body.Read(body)
-	json.Unmarshal(body, &post)
+	json.Unmarshal(body, post)
 	err = post.update()
 	if err != nil {
 		return
@@ -113,12 +111,14 @@ func handlePut(w http.ResponseWriter, r *http.Request, post Text) (err error) {
 	return
 }
 
+// Delete a post
+// DELETE /post/1
 func handleDelete(w http.ResponseWriter, r *http.Request, post Text) (err error) {
 	id, err := strconv.Atoi(path.Base(r.URL.Path))
 	if err != nil {
 		return
 	}
-	err = post.fetch(id)
+	err = post.retrieve(id)
 	if err != nil {
 		return
 	}

@@ -6,7 +6,7 @@ type FakePost struct {
 	Author  string
 }
 
-func (post *FakePost) fetch(id int) (err error) {
+func (post *FakePost) retrieve(id int) (err error) {
 	post.ID = id
 	return
 }

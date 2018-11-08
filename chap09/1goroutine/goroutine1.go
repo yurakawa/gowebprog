@@ -40,6 +40,10 @@ func printLetters2() {
 	}
 }
 
+func print2() {
+	printNumbers2()
+	printLetters2()
+}
 func goPrint2() {
 	go printNumbers2()
 	go printLetters2()

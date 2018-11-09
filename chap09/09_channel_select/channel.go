@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 func callerA(c chan string) {
 	c <- "Hello World"
@@ -15,11 +18,14 @@ func main() {
 	go callerA(a)
 	go callerB(b)
 	for i := 0; i < 5; i++ {
+		time.Sleep(1 * time.Millisecond)
 		select {
 		case msg := <-a:
 			fmt.Printf("%s from A\n", msg)
 		case msg := <-b:
 			fmt.Printf("%s from B\n", msg)
+		default:
+			fmt.Println("Default")
 		}
 	}
 

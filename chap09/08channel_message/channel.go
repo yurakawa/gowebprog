@@ -20,7 +20,7 @@ func cacher(c chan int) {
 }
 
 func main() {
-	c := make(chan int)
+	c := make(chan int, 3)
 	go thrower(c)
 	go cacher(c)
 	time.Sleep(100 * time.Millisecond)

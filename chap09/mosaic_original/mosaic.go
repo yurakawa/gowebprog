@@ -7,7 +7,28 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
+	"sync"
 )
+
+type DB struct {
+	mutex *sync.Mutex
+	store map[string][3]float64
+}
+
+func (db *DB) nearest(target [3]float64) string {
+	var filename string
+	db.mutex.Lock()
+	smallest := 1000000.0
+	for k, v := range db.store {
+		dist := distance(target, v)
+		if dist < smallest {
+			filename, smallest = k, dist
+		}
+	}
+	delete(db.store, filename)
+	db.mutex.Unlock()
+	return filename
+}
 
 // 画像の平均職を求める
 func averageColor(img image.Image) [3]float64 {
@@ -88,10 +109,14 @@ func sq(n float64) float64 {
 var TILESDB map[string][3]float64
 
 // モザイク写真を生成去るたびにタイル画像データベースを複製
-func cloneTilesDB() map[string][3]float64 {
+func cloneTilesDB() DB {
 	db := make(map[string][3]float64)
 	for k, v := range TILESDB {
 		db[k] = v
 	}
-	return db
+	tiles := DB{
+		store: db,
+		mutex: &sync.Mutex{},
+	}
+	return tiles
 }

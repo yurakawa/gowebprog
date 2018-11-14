@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
+	"path/filepath"
 	"sync"
 )
 
@@ -30,7 +31,22 @@ func (db *DB) nearest(target [3]float64) string {
 	return filename
 }
 
-// 画像の平均職を求める
+// resize an image by its ratio e.g. ratio 2 means reduce the size by 1/2, 10 means reduce the size by 1/10
+func resize(in image.Image, newWidth int) image.NRGBA {
+	bounds := in.Bounds()
+	width := bounds.Dx()
+	ratio := width / newWidth
+	out := image.NewNRGBA(image.Rect(bounds.Min.X/ratio, bounds.Min.X/ratio, bounds.Max.X/ratio, bounds.Max.Y/ratio))
+	for y, j := bounds.Min.Y, bounds.Min.Y; y < bounds.Max.Y; y, j = y+ratio, j+1 {
+		for x, i := bounds.Min.X, bounds.Min.X; x < bounds.Max.X; x, i = x+ratio, i+1 {
+			r, g, b, a := in.At(x, y).RGBA()
+			out.SetNRGBA(i, j, color.NRGBA{uint8(r >> 8), uint8(g >> 8), uint8(b >> 8), uint8(a >> 8)})
+		}
+	}
+	return *out
+}
+
+// find the average color of the picture
 func averageColor(img image.Image) [3]float64 {
 	bounds := img.Bounds()
 	r, g, b := 0.0, 0.0, 0.0
@@ -44,71 +60,8 @@ func averageColor(img image.Image) [3]float64 {
 	return [3]float64{r / totalPixels, g / totalPixels, b / totalPixels}
 }
 
-// 指定された幅に画像をリサイズする
-func resize(in image.Image, newWidth int) image.NRGBA {
-	bounds := in.Bounds()
-	ratio := bounds.Dx() / newWidth
-	out := image.NewNRGBA(image.Rect(bounds.Min.X/ratio, bounds.Min.X/ratio, bounds.Max.X/ratio, bounds.Max.Y/ratio))
-	for y, j := bounds.Min.Y, bounds.Min.Y; y < bounds.Max.Y; y, j = y+ratio, j+1 {
-		for x, i := bounds.Min.X, bounds.Min.X; x < bounds.Max.X; x, i = x+ratio, i+1 {
-			r, g, b, a := in.At(x, y).RGBA()
-			out.SetNRGBA(i, j, color.NRGBA{uint8(r >> 8), uint8(g >> 8), uint8(b >> 8), uint8(a >> 8)})
-		}
-	}
-	return *out
-}
-
-// タイル画像データベースをメモリ内に作成
-func tilesDB() map[string][3]float64 {
-	fmt.Println("Start populating tiles db ...")
-	db := make(map[string][3]float64)
-	files, _ := ioutil.ReadDir("tiles")
-	for _, f := range files {
-		name := "tiles/" + f.Name()
-		file, err := os.Open(name)
-		if err == nil {
-			img, _, err := image.Decode(file)
-			if err == nil {
-				db[name] = averageColor(img)
-			} else {
-				fmt.Println("error in populating TILEDB", err, name)
-			}
-		} else {
-			fmt.Println("cannot open file", name, err)
-		}
-		file.Close()
-	}
-	fmt.Println("Finished populating tiles db.")
-	return db
-}
-
-// 最も値が近い画像を見つけ出す
-func nearest(target [3]float64, db *map[string][3]float64) string {
-	var filename string
-	smallest := 1000000.0
-	for k, v := range *db {
-		dist := distance(target, v)
-		if dist < smallest {
-			filename, smallest = k, dist
-		}
-	}
-	delete(*db, filename)
-	return filename
-}
-
-// 2点間のユークリッド距離を計算
-func distance(p1 [3]float64, p2 [3]float64) float64 {
-	return math.Sqrt(sq(p2[0]-p1[0])+sq(p2[1]-p1[1])) + sq(p2[2]-p1[2])
-}
-
-// 2乗の計算
-func sq(n float64) float64 {
-	return n * n
-}
-
 var TILESDB map[string][3]float64
 
-// モザイク写真を生成去るたびにタイル画像データベースを複製
 func cloneTilesDB() DB {
 	db := make(map[string][3]float64)
 	for k, v := range TILESDB {
@@ -119,4 +72,38 @@ func cloneTilesDB() DB {
 		mutex: &sync.Mutex{},
 	}
 	return tiles
+}
+
+// populate a tiles database in memory
+func tilesDB() map[string][3]float64 {
+	fmt.Println("Start populating tiles db ...")
+	db := make(map[string][3]float64)
+	files, _ := ioutil.ReadDir("tiles")
+	for _, f := range files {
+		name := filepath.Join("tiles", f.Name())
+		file, err := os.Open(name)
+		if err == nil {
+			img, _, err := image.Decode(file)
+			if err == nil {
+				db[name] = averageColor(img)
+			} else {
+				fmt.Println("error in populating tiles db:", err, name)
+			}
+		} else {
+			fmt.Println("cannot open file", name, "when populating tiles db:", err)
+		}
+		file.Close()
+	}
+	fmt.Println("Finished populating tiles db.")
+	return db
+}
+
+// find the Eucleadian distance between 2 points
+func distance(p1 [3]float64, p2 [3]float64) float64 {
+	return math.Sqrt(sq(p2[0]-p1[0]) + sq(p2[1]-p1[1]) + sq(p2[2]-p1[2]))
+}
+
+// find the square
+func sq(n float64) float64 {
+	return n * n
 }

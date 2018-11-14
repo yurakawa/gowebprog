@@ -16,25 +16,35 @@ import (
 )
 
 func main() {
+	fmt.Println("Starting mosaic server ...")
 	mux := http.NewServeMux()
 	files := http.FileServer(http.Dir("public"))
 	mux.Handle("/static/", http.StripPrefix("/static/", files))
+
 	mux.HandleFunc("/", upload)
 	mux.HandleFunc("/mosaic", mosaic)
+
 	server := &http.Server{
 		Addr:    "127.0.0.1:8080",
 		Handler: mux,
 	}
-
 	TILESDB = tilesDB()
-	fmt.Println("Mosaic server started")
+
+	fmt.Println("Mosaic server started.")
 	server.ListenAndServe()
+
 }
 
+func upload(w http.ResponseWriter, r *http.Request) {
+	t, _ := template.ParseFiles("upload.html")
+	t.Execute(w, nil)
+}
+
+// cut out the image and return individual channels with image.Image
+// no encoding of JPEG
 func cut(original image.Image, db *DB, tileSize, x1, y1, x2, y2 int) <-chan image.Image {
 	c := make(chan image.Image)
 	sp := image.Point{0, 0}
-
 	go func() {
 		newimage := image.NewNRGBA(image.Rect(x1, y1, x2, y2))
 		for y := y1; y < y2; y = y + tileSize {
@@ -61,23 +71,20 @@ func cut(original image.Image, db *DB, tileSize, x1, y1, x2, y2 int) <-chan imag
 		}
 		c <- newimage.SubImage(newimage.Rect)
 	}()
+
 	return c
 }
 
-func upload(w http.ResponseWriter, r *http.Request) {
-	t, _ := template.ParseFiles("upload.html")
-	t.Execute(w, nil)
-}
-
+// combine the images and return the encoding string
 func combine(r image.Rectangle, c1, c2, c3, c4 <-chan image.Image) <-chan string {
 	c := make(chan string)
-
+	// start a goroutine
 	go func() {
-		var wg sync.WaitGroup // 元画像のすべての区画が最終的な画像にコピーされるまで待つ
-		img := image.NewNRGBA(r)
+		var wg sync.WaitGroup
+		newimage := image.NewNRGBA(r)
 		copy := func(dst draw.Image, r image.Rectangle, src image.Image, sp image.Point) {
 			draw.Draw(dst, r, src, sp, draw.Src)
-			wg.Done() // 元画像の区画がコピーされるたびにカウンタを減算する
+			wg.Done()
 		}
 		wg.Add(4)
 		var s1, s2, s3, s4 image.Image
@@ -85,57 +92,47 @@ func combine(r image.Rectangle, c1, c2, c3, c4 <-chan image.Image) <-chan string
 		for {
 			select {
 			case s1, ok1 = <-c1:
-				go copy(img, s1.Bounds(), s1, image.Point{r.Min.X, r.Min.Y})
+				go copy(newimage, s1.Bounds(), s1, image.Point{r.Min.X, r.Min.Y})
 			case s2, ok2 = <-c2:
-				go copy(img, s2.Bounds(), s2, image.Point{r.Max.X / 2, r.Min.Y})
+				go copy(newimage, s2.Bounds(), s2, image.Point{r.Max.X / 2, r.Min.Y})
 			case s3, ok3 = <-c3:
-				go copy(img, s3.Bounds(), s3, image.Point{r.Min.X, r.Max.Y / 2})
+				go copy(newimage, s3.Bounds(), s3, image.Point{r.Min.X, r.Max.Y / 2})
 			case s4, ok4 = <-c4:
-				go copy(img, s4.Bounds(), s4, image.Point{r.Max.X / 2, r.Max.Y / 2})
+				go copy(newimage, s4.Bounds(), s4, image.Point{r.Max.X / 2, r.Max.Y / 2})
 			}
 			if ok1 && ok2 && ok3 && ok4 {
 				break
 			}
 		}
-
-		wg.Wait() // 全区画のコピーが終わるまで待つ
+		// wait till all copy goroutines are complete
+		wg.Wait()
 		buf2 := new(bytes.Buffer)
-		jpeg.Encode(buf2, img, nil)
+		jpeg.Encode(buf2, newimage, nil)
 		c <- base64.StdEncoding.EncodeToString(buf2.Bytes())
 	}()
 	return c
 }
 
+//  Handler function for fan-out and fan-in
 func mosaic(w http.ResponseWriter, r *http.Request) {
 	t0 := time.Now()
-
-	// bodyのメモリ上の最大容量は10MB
-	r.ParseMultipartForm(10485760)
-
-	// アップロードされたファイルとタイルサイズを取得
+	// get the content from the POSTed form
+	r.ParseMultipartForm(10485760) // max body in memory is 10MB
 	file, _, _ := r.FormFile("image")
 	defer file.Close()
 	tileSize, _ := strconv.Atoi(r.FormValue("tile_size"))
-
-	// アップロードされたターゲット画像をデコード
+	//
+	//   // decode and get original image
 	original, _, _ := image.Decode(file)
 	bounds := original.Bounds()
-
-	// newimage := image.NewRGBA(image.Rect(bounds.Min.X, bounds.Min.X, bounds.Max.X, bounds.Max.Y))
-
-	// タイル画像データベースを複製
 	db := cloneTilesDB()
-
-	// 独立して処理できるように画像を分割して処理を分散(ファン・アウト)
+	// fan-out
 	c1 := cut(original, &db, tileSize, bounds.Min.X, bounds.Min.Y, bounds.Max.X/2, bounds.Max.Y/2)
-	c2 := cut(original, &db, tileSize, bounds.Min.X/2, bounds.Min.Y, bounds.Max.X, bounds.Max.Y/2)
-	c3 := cut(original, &db, tileSize, bounds.Min.X, bounds.Min.Y/2, bounds.Max.X/2, bounds.Max.Y)
-	c4 := cut(original, &db, tileSize, bounds.Min.X/2, bounds.Min.Y/2, bounds.Max.X, bounds.Max.Y)
-
-	// 画像をつなげて処理結果をまとめる
+	c2 := cut(original, &db, tileSize, bounds.Max.X/2, bounds.Min.Y, bounds.Max.X, bounds.Max.Y/2)
+	c3 := cut(original, &db, tileSize, bounds.Min.X, bounds.Max.Y/2, bounds.Max.X/2, bounds.Max.Y)
+	c4 := cut(original, &db, tileSize, bounds.Max.X/2, bounds.Max.Y/2, bounds.Max.X, bounds.Max.Y)
+	// fan-in
 	c := combine(bounds, c1, c2, c3, c4)
-
-	// JPEGにエンコードし、base64文字列に変更してブラウザに送信
 	buf1 := new(bytes.Buffer)
 	jpeg.Encode(buf1, original, nil)
 	originalStr := base64.StdEncoding.EncodeToString(buf1.Bytes())
@@ -144,9 +141,9 @@ func mosaic(w http.ResponseWriter, r *http.Request) {
 	images := map[string]string{
 		"original": originalStr,
 		"mosaic":   <-c,
-		"duration": fmt.Sprintf("%v", t1.Sub(t0)),
+		"duration": fmt.Sprintf("%v ", t1.Sub(t0)),
 	}
+
 	t, _ := template.ParseFiles("results.html")
 	t.Execute(w, images)
-
 }
